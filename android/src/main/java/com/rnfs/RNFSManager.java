@@ -4,10 +4,14 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.HashMap;
 
+import android.database.Cursor;
+import android.media.MediaScannerConnection;
 import android.os.Environment;
 import android.os.StatFs;
+import android.provider.MediaStore;
 import android.util.Base64;
 import android.support.annotation.Nullable;
+import android.util.Log;
 import android.util.SparseArray;
 
 import java.io.File;
@@ -17,6 +21,7 @@ import java.io.FileOutputStream;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.net.URL;
+import android.net.Uri;
 
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContext;
@@ -30,6 +35,7 @@ import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.modules.core.RCTNativeAppEventEmitter;
 
 public class RNFSManager extends ReactContextBaseJavaModule {
+  private static final String TAG = "RNFS";
 
   private static final String RNFSDocumentDirectoryPath = "RNFSDocumentDirectoryPath";
   private static final String RNFSExternalDirectoryPath = "RNFSExternalDirectoryPath";
@@ -217,12 +223,45 @@ public class RNFSManager extends ReactContextBaseJavaModule {
     }
   }
 
+  public static String getRealPathFromUri(ReactContext context, Uri contentUri) {
+      /*
+       * http://stackoverflow.com/questions/20028319/how-to-convert-content-media-external-images-media-y-to-file-storage-sdc
+       */
+      Cursor cursor = null;
+      try {
+          String[] proj = { MediaStore.Images.Media.DATA };
+          cursor = context.getContentResolver().query(contentUri, proj, null, null, null);
+          int column_index = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+          cursor.moveToFirst();
+          return cursor.getString(column_index);
+      } finally {
+          if (cursor != null) {
+              cursor.close();
+          }
+      }
+  }
+
   @ReactMethod
   public void unlink(String filepath, Promise promise) {
     try {
-      File file = new File(filepath);
+      String realFilepath = RNFSManager.getRealPathFromUri(
+        getReactApplicationContext(),
+        Uri.parse(filepath)
+      );
+      File file = new File(realFilepath);
 
-      if (!file.exists()) throw new Exception("File does not exist");
+      Log.i(TAG, "unlinking file");
+      if (!file.exists()) {
+          MediaScannerConnection.scanFile(
+              getReactApplicationContext(),
+              new String[]{file.getAbsolutePath()},
+              null,
+              null
+          );
+
+          Log.e(TAG, "File with path " + filepath + " does not exist");
+          throw new Exception("File does not exist");
+      }
 
       DeleteRecursive(file);
 
@@ -241,6 +280,12 @@ public class RNFSManager extends ReactContextBaseJavaModule {
     }
 
     fileOrDirectory.delete();
+    MediaScannerConnection.scanFile(
+        getReactApplicationContext(),
+        new String[]{fileOrDirectory.getAbsolutePath()},
+        null,
+        null
+    );
   }
 
   @ReactMethod
