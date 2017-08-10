@@ -223,6 +223,18 @@ public class RNFSManager extends ReactContextBaseJavaModule {
     }
   }
 
+  @ReactMethod
+  public void convertContentToFileUri(String contentPath, Promise promise) {
+      String realFilePath = RNFSManager.getRealPathFromUri(
+        getReactApplicationContext(),
+        Uri.parse(contentPath)
+      );
+
+      WritableMap statMap = Arguments.createMap();
+      statMap.putString("path", realFilePath);
+      promise.resolve(statMap);
+  }
+
   public static String getRealPathFromUri(ReactContext context, Uri contentUri) {
       /*
        * http://stackoverflow.com/questions/20028319/how-to-convert-content-media-external-images-media-y-to-file-storage-sdc
